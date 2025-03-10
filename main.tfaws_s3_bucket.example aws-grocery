@@ -1,0 +1,16 @@
+provider "aws" {
+  region = var.aws_region
+}
+
+resource "aws_s3_bucket" "example" {
+  bucket = var.project_name
+  acl    = "private"
+}
+
+variable "aws_region" {
+  default = "eu-central-1"  # Update to match your AWS region (Frankfurt)
+}
+
+variable "project_name" {
+  default = "aws-grocery"  # Update to match your S3 bucket name
+}
