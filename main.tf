@@ -46,14 +46,14 @@ resource "aws_security_group" "ec2_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["185.238.219.45/32"] # Replace with your IP
+    cidr_blocks = ["185.238.219.45/32"] # Replace with your actual IP
   }
 
   ingress {
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = ["185.238.219.45/32"] # Replace with your IP
+    cidr_blocks = ["185.238.219.45/32"] # Replace with your actual IP
   }
 
   egress {
@@ -97,7 +97,7 @@ resource "aws_security_group" "rds_sg" {
 resource "aws_instance" "example" {
   ami                    = "ami-099da3ad959447ffa"
   instance_type          = "t2.micro"
-  key_name               = "NewEc2 tutorial" # Updated key pair
+  key_name               = "NewEc2_tutorial" # Updated key pair
   subnet_id              = aws_subnet.subnet_1.id
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
 
@@ -122,8 +122,8 @@ resource "aws_db_instance" "database" {
   instance_class          = "db.t3.micro"
   engine                  = "postgres"
   engine_version          = "14.15"
-  username                = "dbadmin" # Avoids using 'admin', which is a reserved word
-  password                = "your-secure-password"
+  username                = "dbadmin" 
+  password                = var.db_password  # Replacing hardcoded password
   db_name                 = "exampledb"
   port                    = 5432
   multi_az                = false
