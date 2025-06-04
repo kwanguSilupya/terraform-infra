@@ -1,59 +1,96 @@
 provider "aws" {
-  region  = "eu-central-1"
-  profile = "AdministratorAccess-039612850008"
+  region  = var.region
+  profile = "terraform-sso"
 }
 
 # VPC
-resource "aws_vpc" "main" {
-  cidr_block = "10.0.0.0/16"
+resource "aws_vpc" "main_vpc" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
 
   tags = {
     Name = "MainVPC"
   }
 }
 
-# Subnet 1 (AZ1)
-resource "aws_subnet" "subnet_1" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.3.0/24"
+# Public Subnets
+resource "aws_subnet" "public_subnet_1" {
+  vpc_id                  = aws_vpc.main_vpc.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "${var.region}a"
   map_public_ip_on_launch = true
-  availability_zone       = "eu-central-1a"
 
   tags = {
-    Name = "Subnet1"
+    Name = "PublicSubnet1"
   }
 }
 
-# Subnet 2 (AZ2)
-resource "aws_subnet" "subnet_2" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.4.0/24"
+resource "aws_subnet" "public_subnet_2" {
+  vpc_id                  = aws_vpc.main_vpc.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "${var.region}b"
   map_public_ip_on_launch = true
-  availability_zone       = "eu-central-1b"
 
   tags = {
-    Name = "Subnet2"
+    Name = "PublicSubnet2"
   }
 }
 
-# Security Group for EC2
-resource "aws_security_group" "ec2_sg" {
-  name        = "ec2-security-group"
-  description = "Allow EC2 access"
-  vpc_id      = aws_vpc.main.id
+# Internet Gateway
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main_vpc.id
+
+  tags = {
+    Name = "MainIGW"
+  }
+}
+
+# Route Table
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.main_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+
+  tags = {
+    Name = "PublicRouteTable"
+  }
+}
+
+# Route Table Associations
+resource "aws_route_table_association" "rt_assoc_1" {
+  subnet_id      = aws_subnet.public_subnet_1.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+resource "aws_route_table_association" "rt_assoc_2" {
+  subnet_id      = aws_subnet.public_subnet_2.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+# Security Group
+resource "aws_security_group" "instance_sg" {
+  name        = "instance-sg"
+  description = "Allow SSH and PostgreSQL"
+  vpc_id      = aws_vpc.main_vpc.id
 
   ingress {
+    description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["185.238.219.45/32"] # Replace with your actual IP
+    cidr_blocks = [var.allowed_ip]
   }
 
   ingress {
+    description = "PostgreSQL"
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = ["185.238.219.45/32"] # Replace with your actual IP
+    cidr_blocks = [var.allowed_ip]
   }
 
   egress {
@@ -64,75 +101,65 @@ resource "aws_security_group" "ec2_sg" {
   }
 
   tags = {
-    Name = "EC2 Security Group"
+    Name = "InstanceSG"
   }
 }
 
-# Security Group for RDS
-resource "aws_security_group" "rds_sg" {
-  name        = "rds-security-group"
-  description = "Allow EC2 access to RDS"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ec2_sg.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "RDS Security Group"
-  }
+# EC2 Key Pair
+resource "aws_key_pair" "new_keypair_tf" {
+  key_name   = var.key_name
+  public_key = file("new_keypair_tf.pub")
 }
 
-# EC2 Instance
-resource "aws_instance" "example" {
-  ami                    = "ami-099da3ad959447ffa"
-  instance_type          = "t2.micro"
-  key_name               = "NewEc2_tutorial" # Updated key pair
-  subnet_id              = aws_subnet.subnet_1.id
-  vpc_security_group_ids = [aws_security_group.ec2_sg.id]
+# RDS Subnet Group
+resource "aws_db_subnet_group" "rds_subnet_group" {
+  name       = "rds-ec2-db-subnet-group"
+  subnet_ids = [aws_subnet.public_subnet_1.id, aws_subnet.public_subnet_2.id]
 
   tags = {
-    Name = "Example EC2"
-  }
-}
-
-# DB Subnet Group (Required for RDS)
-resource "aws_db_subnet_group" "main" {
-  name       = "main-db-subnet-group"
-  subnet_ids = [aws_subnet.subnet_1.id, aws_subnet.subnet_2.id]
-
-  tags = {
-    Name = "Main DB Subnet Group"
+    Name = "RDSSubnetGroup"
   }
 }
 
 # RDS PostgreSQL Instance
 resource "aws_db_instance" "database" {
+  identifier              = "mydb"
   allocated_storage       = 20
-  instance_class          = "db.t3.micro"
   engine                  = "postgres"
-  engine_version          = "14.15"
-  username                = "dbadmin" 
-  password                = var.db_password  # Replacing hardcoded password
-  db_name                 = "exampledb"
-  port                    = 5432
-  multi_az                = false
-  storage_type            = "gp2"
-  backup_retention_period = 7
-  vpc_security_group_ids  = [aws_security_group.rds_sg.id]
-  db_subnet_group_name    = aws_db_subnet_group.main.name
+  engine_version          = "17.5"
+  instance_class          = "db.t3.micro"
+  username                = var.db_username
+  password                = var.db_password
+  db_subnet_group_name    = aws_db_subnet_group.rds_subnet_group.name
+  vpc_security_group_ids  = [aws_security_group.instance_sg.id]
+  publicly_accessible     = true
+  skip_final_snapshot     = true
 
   tags = {
-    Name = "Example RDS"
+    Name = "PostgresDB"
+  }
+}
+
+# EC2 Instance
+resource "aws_instance" "web" {
+  ami                         = var.ami_id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.public_subnet_1.id
+  vpc_security_group_ids      = [aws_security_group.instance_sg.id]
+  key_name                    = aws_key_pair.new_keypair_tf.key_name
+  associate_public_ip_address = true
+
+  root_block_device {
+    volume_size = 8
+    volume_type = "gp2"
+  }
+
+  depends_on = [
+    aws_security_group.instance_sg,
+    aws_key_pair.new_keypair_tf
+  ]
+
+  tags = {
+    Name = "web-instance1"
   }
 }

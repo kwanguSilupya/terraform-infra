@@ -1,43 +1,70 @@
-variable "aws_region" {
+variable "region" {
   description = "AWS region"
-  default     = "eu-central-1"
+  type        = string
 }
 
-variable "vpc_id" {
-  description = "VPC ID"
+variable "aws_profile" {
+  description = "AWS CLI profile to use"
+  type        = string
+}
+
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC"
+  type        = string
+}
+
+variable "public_subnet_1_cidr" {
+  description = "CIDR block for public subnet 1"
+  type        = string
+}
+
+variable "public_subnet_2_cidr" {
+  description = "CIDR block for public subnet 2"
+  type        = string
+}
+
+variable "allowed_ip" {
+  description = "IP allowed for SSH and DB access"
+  type        = string
+}
+
+variable "key_name" {
+  description = "Name for the EC2 key pair"
+  type        = string
+}
+
+variable "public_key_path" {
+  description = "Path to your public key file"
+  type        = string
 }
 
 variable "ami_id" {
-  description = "AMI ID for EC2"
+  description = "AMI ID for EC2 instance"
+  type        = string
 }
 
 variable "instance_type" {
   description = "EC2 instance type"
-  default     = "t2.micro"
-}
-
-variable "key_name" {
-  description = "Key Pair Name"
-}
-
-variable "allowed_ip" {
-  description = "Allowed IP for SSH access"
-  default     = "0.0.0.0/0" # Change this for security
-}
-
-variable "subnet_id" {
-  description = "Subnet ID"
+  type        = string
 }
 
 variable "db_username" {
-  description = "Database username"
+  description = "RDS database username"
+  type        = string
 }
 
 variable "db_password" {
-  description = "Database password"
+  description = "RDS database password"
+  type        = string
+  sensitive   = true
 }
 
-variable "db_subnet_group" {
-  description = "DB Subnet Group Name"
+variable "db_engine_version" {
+  description = "RDS engine version"
+  type        = string
 }
-variable "db_password" { type = string }
+
+variable "db_instance_class" {
+  description = "RDS instance class"
+  type        = string
+}
